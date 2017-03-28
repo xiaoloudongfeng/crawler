@@ -1,107 +1,107 @@
 #include "core.h"
 
 static connection_t   *connections;
-static event_t		  *read_events;
-static event_t		  *write_events;
+static event_t        *read_events;
+static event_t        *write_events;
 
-static connection_t	   *free_connections;
-static uint32_t			free_connection_n;
+static connection_t    *free_connections;
+static uint32_t         free_connection_n;
 
 uint32_t get_free_connection_n(void)
 {
-	return free_connection_n;
+    return free_connection_n;
 }
 
 int connection_init(uint32_t n)
 {
-	connection_t   *c, *next;
-	int				i;
+    connection_t   *c, *next;
+    int             i;
 
-	connections = calloc(n, sizeof(connection_t));
-	if (connections == NULL) {
-		LOG_ERROR("calloc() failed");
-		return -1;
-	}
+    connections = calloc(n, sizeof(connection_t));
+    if (connections == NULL) {
+        LOG_ERROR("calloc() failed");
+        return -1;
+    }
 
-	c = connections;
-	write_events = calloc(n, sizeof(event_t));
-	if (write_events == NULL) {
-		LOG_ERROR("calloc() failed");
-		return -1;
-	}
+    c = connections;
+    write_events = calloc(n, sizeof(event_t));
+    if (write_events == NULL) {
+        LOG_ERROR("calloc() failed");
+        return -1;
+    }
 
-	read_events = calloc(n, sizeof(event_t));
-	if (read_events == NULL) {
-		LOG_ERROR("calloc() failed");
-		return -1;
-	}
+    read_events = calloc(n, sizeof(event_t));
+    if (read_events == NULL) {
+        LOG_ERROR("calloc() failed");
+        return -1;
+    }
 
-	i = n;
-	next = NULL;
-	
-	do {
-		i--;
+    i = n;
+    next = NULL;
+    
+    do {
+        i--;
 
-		c[i].data = next;
-		c[i].read = &read_events[i];
-		c[i].write = &write_events[i];
-		c[i].fd = -1;
+        c[i].data = next;
+        c[i].read = &read_events[i];
+        c[i].write = &write_events[i];
+        c[i].fd = -1;
 
-		next = &c[i];
-	} while (i);
-	
-	free_connections = next;
-	free_connection_n = n;
+        next = &c[i];
+    } while (i);
+    
+    free_connections = next;
+    free_connection_n = n;
 
-	return 0;
+    return 0;
 }
 
 connection_t *get_connection(int s)
 {
-	connection_t   *c;
-	event_t		   *rev, *wev;
+    connection_t   *c;
+    event_t        *rev, *wev;
 
-	c = free_connections;
+    c = free_connections;
 
-	if (c == NULL) {
-		return NULL;
-	}
+    if (c == NULL) {
+        return NULL;
+    }
 
-	free_connections = c->data;
-	free_connection_n--;
+    free_connections = c->data;
+    free_connection_n--;
 
-	rev = c->read;
-	wev = c->write;
+    rev = c->read;
+    wev = c->write;
 
-	memset(c, 0, sizeof(connection_t));
-	memset(rev, 0, sizeof(event_t));
-	memset(wev, 0, sizeof(event_t));
+    memset(c, 0, sizeof(connection_t));
+    memset(rev, 0, sizeof(event_t));
+    memset(wev, 0, sizeof(event_t));
 
-	c->read = rev;
-	c->write = wev;
-	c->fd = s;
+    c->read = rev;
+    c->write = wev;
+    c->fd = s;
 
-	rev->data = c;
-	wev->data = c;
+    rev->data = c;
+    wev->data = c;
 
-	return c;
+    return c;
 }
 
 void free_connection(connection_t *c)
 {
-	c->data = free_connections;
-	free_connections = c;
-	free_connection_n++;
+    c->data = free_connections;
+    free_connections = c;
+    free_connection_n++;
 }
 
 void close_connection(connection_t *c)
 {
-	int fd;
+    int fd;
 
-	if (c->fd == -1) {
-		LOG_ERROR("connection already closed");
-		return;
-	}
+    if (c->fd == -1) {
+        LOG_ERROR("connection already closed");
+        return;
+    }
 
     if (c->read->active) {
         event_del(c->read, READ_EVENT, CLOSE_EVENT);
@@ -111,22 +111,22 @@ void close_connection(connection_t *c)
         event_del(c->write, READ_EVENT, CLOSE_EVENT);
     }
 
-	// 如果读写事件已经被加入定时器, 需要移除
-	// 关闭fd, epoll事件循环就自动将其移除, 所以不需要移除读、写事件
-	if (c->read->timer_set) {
-		event_del_timer(c->read);
-	}
+    // 如果读写事件已经被加入定时器, 需要移除
+    // 关闭fd, epoll事件循环就自动将其移除, 所以不需要移除读、写事件
+    if (c->read->timer_set) {
+        event_del_timer(c->read);
+    }
 
-	if (c->write->timer_set) {
-		event_del_timer(c->write);
-	}
+    if (c->write->timer_set) {
+        event_del_timer(c->write);
+    }
 
-	free_connection(c);
+    free_connection(c);
 
-	fd = c->fd;
-	c->fd = -1;
+    fd = c->fd;
+    c->fd = -1;
 
-	close(fd);
+    close(fd);
 }
 
 /*
@@ -249,42 +249,42 @@ ssize_t unix_send(connection_t *c, u_char *buf, size_t size)
  */
 ssize_t unix_udp_recv(connection_t *c, u_char *buf, size_t size)
 {
-	ssize_t		n;
-	event_t	   *rev;
-	int			err;
+    ssize_t     n;
+    event_t    *rev;
+    int         err;
 
-	rev = c->read;
+    rev = c->read;
 
-	do {
-		n = recv(c->fd, buf, size, 0);
+    do {
+        n = recv(c->fd, buf, size, 0);
 
-		LOG_DEBUG("recv: fd:%d %zd of %zu", c->fd, n, size);
+        LOG_DEBUG("recv: fd:%d %zd of %zu", c->fd, n, size);
 
-		if (n >= 0) {
-			return n;
-		}
+        if (n >= 0) {
+            return n;
+        }
 
-		err = errno;
+        err = errno;
 
-		if (err == EAGAIN || err == EINTR) {
-			LOG_DEBUG("recv() not ready");
+        if (err == EAGAIN || err == EINTR) {
+            LOG_DEBUG("recv() not ready");
             n = -EAGAIN;
-		
+        
         } else {
             LOG_ERROR("recv() failed: [%s]", strerror(err));
             n = -1;
             break;
         }
 
-	} while (err == EINTR);
+    } while (err == EINTR);
 
-	rev->ready = 0;
+    rev->ready = 0;
 
-	if (n == -1) {
-		rev->error = 1;
-	}
+    if (n == -1) {
+        rev->error = 1;
+    }
 
-	return n;
+    return n;
 }
 
 static void ssl_write_handler(event_t *wev)
@@ -353,53 +353,53 @@ static int ssl_handle_recv(connection_t *c, int n)
 
 void ssl_error(void)
 {
-	int			flags;
-	u_long		n;
-	char	   *p, *last;
-	const char *data;
-	char		errstr[1024];
+    int         flags;
+    u_long      n;
+    char       *p, *last;
+    const char *data;
+    char        errstr[1024];
 
-	last = errstr + 1024;
+    last = errstr + 1024;
 
-	strcpy(errstr, "ignoring stale global SSL error");
+    strcpy(errstr, "ignoring stale global SSL error");
 
-	p = errstr + strlen(errstr);
+    p = errstr + strlen(errstr);
 
-	for ( ;; ) {
-		n = ERR_peek_error_line_data(NULL, NULL, &data, &flags);
+    for ( ;; ) {
+        n = ERR_peek_error_line_data(NULL, NULL, &data, &flags);
 
-		if (n == 0) {
-			break;
-		}
+        if (n == 0) {
+            break;
+        }
 
-		if (p >= last) {
-			goto next;
-		}
+        if (p >= last) {
+            goto next;
+        }
 
-		*p++ = ' ';
+        *p++ = ' ';
 
-		ERR_error_string_n(n, p, last - p);
+        ERR_error_string_n(n, p, last - p);
 
-		while (p < last && *p) {
-			p++;
-		}
+        while (p < last && *p) {
+            p++;
+        }
 
-		if (p < last && *data && (flags & ERR_TXT_STRING)) {
-			*p++ = ':';
-			strncat(errstr, data, last - p);
-			p = errstr + strlen(errstr);
-		}
+        if (p < last && *data && (flags & ERR_TXT_STRING)) {
+            *p++ = ':';
+            strncat(errstr, data, last - p);
+            p = errstr + strlen(errstr);
+        }
 
-	next:
-		(void) ERR_get_error();
-	}
+    next:
+        (void) ERR_get_error();
+    }
 
-	LOG_ERROR("%s", errstr);
+    LOG_ERROR("%s", errstr);
 }
 
 ssize_t ssl_recv(connection_t *c, u_char *buf, size_t size)
 {
-	int	n, bytes;
+    int n, bytes;
 
     if (c->ssl->last == -1) {
         c->read->error = 1;
@@ -415,7 +415,7 @@ ssize_t ssl_recv(connection_t *c, u_char *buf, size_t size)
     bytes = 0;
     while (ERR_peek_error()) {
         // LOG_ERROR("ignoring stale global SSL error");
-		ssl_error();
+        ssl_error();
     }
 
     ERR_clear_error();
@@ -435,7 +435,7 @@ ssize_t ssl_recv(connection_t *c, u_char *buf, size_t size)
         if (c->ssl->last == 0) {
             size -= n;
             
-			if (size == 0) {
+            if (size == 0) {
                 c->read->ready = 1;
                 return bytes;
             }
@@ -484,7 +484,7 @@ ssize_t ssl_send(connection_t *c, u_char *buf, size_t size)
 
     while (ERR_peek_error()) {
         // LOG_ERROR("ignoring stale global SSL error");
-		ssl_error();
+        ssl_error();
     }
 
     ERR_clear_error();

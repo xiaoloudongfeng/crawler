@@ -1,4 +1,4 @@
-#ifndef	_CONNECTION_H_INCLUDED_
+#ifndef _CONNECTION_H_INCLUDED_
 #define _CONNECTION_H_INCLUDED_
 
 #include "core.h"
@@ -23,26 +23,26 @@ typedef struct {
 
 
 struct connection_s {
-	void			   *data;
-	event_t			   *read;
-	event_t			   *write;
+    void               *data;
+    event_t            *read;
+    event_t            *write;
 
-	int					fd;
+    int                 fd;
 
-	recv_pt				recv;
-	send_pt				send;
+    recv_pt             recv;
+    send_pt             send;
 
-	off_t				sent;
+    off_t               sent;
 
-	struct sockaddr	   *sockaddr;
-	socklen_t			socklen;
-	char			   *addr_text;
-	
-	ssl_connection_t   *ssl;
+    struct sockaddr    *sockaddr;
+    socklen_t           socklen;
+    char               *addr_text;
+    
+    ssl_connection_t   *ssl;
 
-	char *				buf;
+    char *              buf;
 
-	queue_t				queue;
+    queue_t             queue;
 };
 
 uint32_t get_free_connection_n(void);

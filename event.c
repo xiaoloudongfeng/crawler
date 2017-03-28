@@ -3,36 +3,36 @@
 
 static int                  ep = -1;
 static struct epoll_event  *event_list;
-static uint32_t				nevents = 512;
+static uint32_t             nevents = 512;
 
 int event_init(int num)
 {
-	if (ep == -1) {
-		ep = epoll_create(num);
+    if (ep == -1) {
+        ep = epoll_create(num);
 
-		if (ep == -1) {
-			LOG_ERROR("epoll_create() failed");
+        if (ep == -1) {
+            LOG_ERROR("epoll_create() failed");
 
-			return -1;
-		}
-	}
+            return -1;
+        }
+    }
 
-	if (event_list) {
-		free(event_list);
-	}
+    if (event_list) {
+        free(event_list);
+    }
 
-	event_list = (struct epoll_event *)calloc(nevents, sizeof(struct epoll_event));
-	if (event_list == NULL) {
-		return -1;
-	}
+    event_list = (struct epoll_event *)calloc(nevents, sizeof(struct epoll_event));
+    if (event_list == NULL) {
+        return -1;
+    }
 
-	return 0;
+    return 0;
 }
 
 int event_add(event_t *ev, int32_t event, uint32_t flags)
 {
     int                 op;
-	uint32_t            events, prev;
+    uint32_t            events, prev;
     event_t            *e;
     connection_t       *c;
     struct epoll_event  ee;
@@ -120,7 +120,7 @@ int event_del(event_t *ev, int32_t event, uint32_t flags)
 
     ev->active = 0;
 
-	return 0;
+    return 0;
 }
 
 int event_process(int timeout)
@@ -131,7 +131,7 @@ int event_process(int timeout)
     connection_t   *c;
     int             i;
 
-	events = epoll_wait(ep, event_list, nevents, timeout);
+    events = epoll_wait(ep, event_list, nevents, timeout);
 
     if (events < 0) {
         if (errno == EINTR) {
@@ -200,6 +200,6 @@ int event_process(int timeout)
         }
     }
 
-	return 0;
+    return 0;
 }
 

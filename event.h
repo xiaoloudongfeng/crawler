@@ -3,21 +3,21 @@
 
 #include "core.h"
 
-#define READ_EVENT		(EPOLLIN|EPOLLRDHUP)
-#define	WRITE_EVENT		EPOLLOUT
-#define CLEAR_EVENT		EPOLLET
+#define READ_EVENT      (EPOLLIN|EPOLLRDHUP)
+#define WRITE_EVENT     EPOLLOUT
+#define CLEAR_EVENT     EPOLLET
 #define CLOSE_EVENT     1
 
 struct event_s {
-	void			   *data;
-	unsigned			wirte:1;
-	unsigned			active:1;       // 已经加入事件循环
+    void               *data;
+    unsigned            wirte:1;
+    unsigned            active:1;       // 已经加入事件循环
 
     unsigned            ready:1;
 
     rbtree_node_t       timer;
-	unsigned			timedout:1;     // 已经超时
-	unsigned			timer_set:1;    // 已经加入定时器
+    unsigned            timedout:1;     // 已经超时
+    unsigned            timer_set:1;    // 已经加入定时器
 
     /* the pending eof reported by epoll */
     unsigned            pending_eof:1;
@@ -25,8 +25,8 @@ struct event_s {
     unsigned            eof:1;
 
     unsigned            error:1;
-	
-	event_handler_pt	handler;        // 事件处理函数
+    
+    event_handler_pt    handler;        // 事件处理函数
 }; 
 
 int event_init(int num);

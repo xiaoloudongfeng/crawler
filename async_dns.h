@@ -9,7 +9,7 @@ struct http_url_s {
     char    *buf;
     uint16_t port;
     char    *schema;
-	char    *host;
+    char    *host;
     char    *path;
 
     queue_t queue;
