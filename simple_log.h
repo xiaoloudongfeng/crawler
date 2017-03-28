@@ -32,59 +32,38 @@ static inline void time_stamp(void)
         p->tm_year + 1900, p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec);
 }
 
-#define LOG_FATAL(fmt, args...)                                                             \
+#define LOG_BASE(level, fmt, args...)                                                       \
     do {                                                                                    \
         time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_FATAL "%s " fmt ESC_END LN, time_buf, ##args);      \
+        fprintf(stderr, ESC_START COLOR_##level "%s " fmt ESC_END LN, time_buf, ##args);    \
     } while (0)
+
+#define LOG_FATAL(fmt, args...)                                                             \
+    LOG_BASE(FATAL, fmt, ##args)
 
 #define LOG_ALERT(fmt, args...)                                                             \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_ALERT "%s " fmt ESC_END LN, time_buf, ##args);      \
-    } while (0)
+    LOG_BASE(ALERT, fmt, ##args)
 
 #define LOG_CRIT(fmt, args...)                                                              \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_CRIT "%s " fmt ESC_END LN, time_buf, ##args);       \
-    } while (0)
+    LOG_BASE(CRIT, fmt, ##args)
 
 #define LOG_ERROR(fmt, args...)                                                             \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_ERROR "%s " fmt ESC_END LN, time_buf, ##args);      \
-    } while (0)
+    LOG_BASE(ERROR, fmt, ##args)
 
 #define LOG_WARN(fmt, args...)                                                              \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_WARN "%s " fmt ESC_END LN, time_buf, ##args);       \
-    } while (0)
+    LOG_BASE(WARN, fmt, ##args)
 
 #define LOG_NOTICE(fmt, args...)                                                            \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_NOTICE "%s " fmt ESC_END LN, time_buf, ##args);     \
-    } while (0)
+    LOG_BASE(NOTICE, fmt, ##args)
 
 #define LOG_INFO(fmt, args...)                                                              \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_INFO "%s " fmt ESC_END LN, time_buf, ##args);       \
-    } while (0)
+    LOG_BASE(INFO, fmt, ##args)
 
 #define LOG_DEBUG(fmt, args...)                                                             \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_DEBUG "%s " fmt ESC_END LN, time_buf, ##args);      \
-    } while (0)
+    LOG_BASE(DEBUG, fmt, ##args)
 
 #define LOG_TRACE(fmt, args...)                                                             \
-    do {                                                                                    \
-        time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_TRACE "%s " fmt ESC_END LN, time_buf, ##args);      \
-    } while (0)
+    LOG_BASE(TRACE, fmt, ##args)
 
 /*
 int log_init(void)

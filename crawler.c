@@ -15,7 +15,7 @@ static void create_http_client(http_url_t *url, struct in_addr *sin_addr)
 
 int main(void)
 {
-    int          rc, i;
+    int i;
 
     SSL_library_init();
     SSL_load_error_strings();
@@ -23,28 +23,23 @@ int main(void)
 
     queue_init(&url_q);
 
-    rc = event_init(1024);
-    if (rc < 0) {
+    if (event_init(1024) < 0) {
         return -1;
     }
 
-    rc = event_timer_init();
-    if (rc < 0) {
+    if (event_timer_init() < 0) {
         return -1;
     }
 
-    rc = connection_init(1024);
-    if (rc < 0) {
+    if (connection_init(1024) < 0) {
         return -1;
     }
 
-    rc = dns_init();
-    if (rc < 0) {
+    if (dns_init() < 0) {
         return -1;
     }
 
-    rc = bloom_init();
-    if (rc < 0) {
+    if (bloom_init() < 0) {
         return -1;
     }
     
@@ -53,7 +48,7 @@ int main(void)
     char *path = "/forum.php?mod=forumdisplay&fid=2";
     
     http_url_t *url = create_http_url(schemahttp, host, path);
-    rc = dns_query(url, create_http_client);
+    dns_query(url, create_http_client);
     
     i = 0;
     while (1) {
