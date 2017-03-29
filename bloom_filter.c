@@ -25,11 +25,11 @@ int bloom_init(void)
     ctx = redisConnectWithTimeout(hostname, port, timeout);
     if (ctx == NULL || ctx->err) {
         if (ctx) {
-            LOG_ERROR("Connection error: %s\n", ctx->errstr);
+            LOG_ERROR("Connection failed: %s", ctx->errstr);
             redisFree(ctx);
 
         } else {
-            LOG_ERROR("Connection error: can't allocate redis context\n");
+            LOG_ERROR("Connection failed: can't allocate redis context");
         }
 
         return -1;
@@ -37,7 +37,7 @@ int bloom_init(void)
 
     reply = redisCommand(ctx, "SETBIT %s %u %s", "bloom_filter", BIT_SIZE, "0");
     if (reply == NULL || ctx->err) {
-        LOG_ERROR("redisCommand error: %s\n", ctx->errstr);
+        LOG_ERROR("redisCommand failed: %s", ctx->errstr);
         
         return -1;
     }
@@ -45,9 +45,10 @@ int bloom_init(void)
 
     reply = redisCommand(ctx, "BITOP %s %s %s %s", "XOR", "bloom_filter", "bloom_filter", "bloom_filter");
     if (reply == NULL || ctx->err) {
-        LOG_ERROR("redisCommand error: %s\n", ctx->errstr);
+        LOG_ERROR("redisCommand failed: %s", ctx->errstr);
         return -1;
     }
+
     freeReplyObject(reply);
 
     return 0;
@@ -65,7 +66,7 @@ int bloom_set(const char *str)
         
         reply = redisCommand(ctx, "SETBIT %s %u %s", "bloom_filter", off, "1");
         if (reply == NULL || ctx->err) {
-            LOG_ERROR("redisCommand error: %s\n", ctx->errstr);
+            LOG_ERROR("redisCommand failed: %s", ctx->errstr);
             
             return -1;
         }
@@ -87,7 +88,7 @@ int bloom_check(const char *str)
         
         reply = redisCommand(ctx, "GETBIT %s %u", "bloom_filter", off);
         if (reply == NULL || ctx->err) {
-            LOG_ERROR("redisCommand error: %s\n", ctx->errstr);
+            LOG_ERROR("redisCommand failed: %s", ctx->errstr);
 
             return -1;
         }
