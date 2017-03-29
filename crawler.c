@@ -1,75 +1,35 @@
 #include "core.h"
-#include "http_client.h"
 
-static queue_t url_q;
-
-void insert_queue(http_url_t *url)
-{
-    queue_insert_tail(&url_q, &url->queue);
-}
-
-static void create_http_client(http_url_t *url, struct in_addr *sin_addr)
-{
-    http_client_create(url, sin_addr, parse_html);
-}
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+#include "process_cycle.h"
 
 int main(void)
 {
-    int i;
+    lua_State *L;
 
     SSL_library_init();
     SSL_load_error_strings();
     OpenSSL_add_all_algorithms();
 
-    queue_init(&url_q);
-
-    if (event_init(1024) < 0) {
+    if (redis_init() < 0) {
+        LOG_ERROR("redis_init() failed");
         return -1;
     }
 
-    if (event_timer_init() < 0) {
-        return -1;
-    }
-
-    if (connection_init(1024) < 0) {
-        return -1;
-    }
-
-    if (dns_init() < 0) {
-        return -1;
-    }
-
-    if (bloom_init() < 0) {
-        return -1;
-    }
+    L = init_lua_state("settings.lua");
     
-    char *schemahttp = "http";
-    char *host = "bbs.dgtle.com";
-    char *path = "/forum.php?mod=forumdisplay&fid=2";
-    
-    http_url_t *url = create_http_url(schemahttp, host, path);
-    dns_query(url, create_http_client);
-    
-    i = 0;
-    while (1) {
+    get_work_processes(L);
+    get_connection_threshold(L);
+    get_url_seed(L);
 
-        LOG_INFO("-----round[%d]-----", i++);
-        event_process(1000);
+    free_lua_state(L);
+    LOG_DEBUG("free_lua_state()");
+    redis_free();
+    LOG_DEBUG("redis_free()");
 
-        event_expire_timers();
-
-        if (get_free_connection_n() > 1000) {
-            queue_t *p = url_q.next;
-            
-            if (p != &url_q) {
-                queue_remove(p);
-
-                http_url_t *url = queue_data(p, http_url_t, queue);
-                
-                dns_query(url, create_http_client);
-            }
-        }
-    }
+    start_work_processes();
     
     return 0;
 }

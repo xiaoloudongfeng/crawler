@@ -1,32 +1,25 @@
 #include "core.h"
-#include "html_parser.h"
 #include <gumbo.h>
-#include <http_parser.h>
+
+#include "html_parser.h"
+#include "murmur3.h"
+#include "process_cycle.h"
 
 void insert_queue(http_url_t *url);
 
 static void search_for_links(GumboNode *node)
 {
-    GumboAttribute         *href;
-    int                     i;
-    int                     rc;
-    struct http_parser_url  u;
-    http_url_t             *url;
-
-    char                    httpurl[1024];
-    char                    schemahttp[1024];
-    char                    host[1024];
-    char                    path[1024];
+    GumboAttribute *href;
+    int             i;
+    char            httpurl[1024];
+    char            key[128];
+    unsigned        id;
 
     if (node->type != GUMBO_NODE_ELEMENT) {
         return;
     }
 
-    memset(&u, 0, sizeof(u));
     memset(httpurl, 0, sizeof(httpurl));
-    memset(schemahttp, 0, sizeof(schemahttp));
-    memset(host, 0, sizeof(host));
-    memset(path, 0, sizeof(path));
     href = NULL;
 
     if (node->v.element.tag == GUMBO_TAG_A && 
@@ -43,26 +36,21 @@ static void search_for_links(GumboNode *node)
                 LOG_INFO("httpurl[%s]", httpurl);
 
                 bloom_set(httpurl);
-                rc = http_parser_parse_url(httpurl, strlen(httpurl), 0, &u);
-                if (rc != 0) {
-                    LOG_WARN("http_parser_parse_url() failed");
 
-                } else {
-                    if ((u.field_set & (1 << UF_HOST))) {
-                        strncpy(schemahttp, httpurl + u.field_data[UF_SCHEMA].off, u.field_data[UF_SCHEMA].len);
-                        strncpy(host, httpurl + u.field_data[UF_HOST].off, u.field_data[UF_HOST].len);
-                        strcpy(path, httpurl + u.field_data[UF_PATH].off);
+                // 计算url的hash值，并对work_processes取模，将url散列到不同的队列中
+                MurmurHash3_x86_32(httpurl, strlen(httpurl), SEED_NUM, (void *)&id);
+                id %= work_processes;
 
-                        url = create_http_url(schemahttp, host, path);
-                        if (url == NULL) {
-                            LOG_ERROR("create_http_url() failed");
-                        }
+                // 根据id得到list的key
+                memset(key, 0, sizeof(key));
+                sprintf(key, "url_list_%d", id);
 
-                        insert_queue(url);
+                // 插入Redis队列中
+                LOG_DEBUG("insert rpush %s to %s", httpurl, key);
+                if (redis_list_rpush(key, httpurl) < 0) {
+                    LOG_ERROR("redis_list_rpush() failed");
 
-                    } else {
-                        LOG_WARN("host_name don't exist");
-                    }
+                    return;
                 }
             }
         }

@@ -21,7 +21,7 @@ int dns_init(void);
 
 int dns_query(http_url_t *url, dns_query_handler_pt handler);
 
-http_url_t *create_http_url(char *schema, char *host, char *path);
+http_url_t *create_http_url(const char *url);
 
 #endif
 

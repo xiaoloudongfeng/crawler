@@ -1,5 +1,7 @@
 #include "core.h"
 
+#include "http_parser.h"
+
 #define DNS_UDP_SIZE    4096
 #define DNS_TRY_LIMIT   1
 
@@ -476,11 +478,38 @@ int dns_query(http_url_t *url, dns_query_handler_pt handler)
     return 0;
 }
 
-http_url_t *create_http_url(char *schema, char *host, char *path)
+http_url_t *create_http_url(const char *str_url)
 {
+    char        schema[1024];
+    char        host[1024];
+    char        path[1024];
+    struct http_parser_url u;
+    
     http_url_t *url;
     char       *p;
-    
+
+    memset(schema, 0, sizeof(schema));
+    memset(host, 0, sizeof(host));
+    memset(path, 0, sizeof(path));
+
+    if (http_parser_parse_url(str_url, strlen(str_url), 0, &u) != 0) {
+        LOG_ERROR("http_parser_parse_url() failed");
+
+        return NULL;
+
+    } else {
+        if ((u.field_set & (1 << UF_HOST))) {
+            strncpy(schema, str_url + u.field_data[UF_SCHEMA].off, u.field_data[UF_SCHEMA].len);
+            strncpy(host, str_url + u.field_data[UF_HOST].off, u.field_data[UF_HOST].len);
+            strcpy(path, str_url + u.field_data[UF_PATH].off);
+        
+        } else {
+            LOG_ERROR("host_name don't exist");
+
+            return NULL;
+        }
+    }
+
     url = (http_url_t *)malloc(sizeof(http_url_t));
     if (url == NULL) {
         LOG_ERROR("malloc() failed");

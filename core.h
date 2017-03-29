@@ -18,5 +18,6 @@ typedef void (*connection_handler_pt)(connection_t *c);
 #include "http_client.h"
 #include "html_parser.h"
 #include "bloom_filter.h"
+#include "redis_list.h"
 
 #endif
