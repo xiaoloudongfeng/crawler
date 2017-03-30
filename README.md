@@ -21,4 +21,7 @@ cd crawler
 make
 ./tool/run.sh
 ```
-由于依赖库路径的关系，我的环境需要将手工/usr/local/lib加到LD_LIBRARY_PATH中，所以写一个run.sh方便一些
+由于依赖库路径的关系，我的环境需要将手工/usr/local/lib加到LD_LIBRARY_PATH中，所以写一个run.sh方便一些<br>
+settings.lua是配置文件，遵循lua语法格式，字段说明：<br>
+work_processes 为进程数量，建议设置为cpu核心数<br>
+seed           为种子地址列表，可以配置多个，用逗号分隔<br>
