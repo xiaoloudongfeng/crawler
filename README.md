@@ -1,12 +1,14 @@
 异步并发爬虫
 ===========
 ## 1.简介
-一个借鉴nginx事件模块的异步并发爬虫，性能还算不错<br>
+一个多进程异步并发爬虫，性能还算不错<br>
 目前实现：<br>
-带缓存的异步dns请求接口<br>
+基于epoll的事件模块，高性能红黑树定时器<br>
+带缓存的异步dns resolver<br>
 基于redis的布隆过滤器<br>
-一个c http客户端，支持https、chunk、gzip等，但只支持get操作，不支持cookie（计划后面改进）<br>
-参照了nginx的epoll事件模块，完全照搬了nginx的红黑树定时器（自己实现过时间轮，明显没nginx的好）<br>
+多进程异步并发，充分利用多核优势，可配置进程数，绑定CPU<br>
+基于redis的任务队列，通过murmur hash对地址散列，实现负载均衡<br>
+异步http客户端，支持https，目前仅支持get操作，不支持cookie（计划后面改进）<br>
 
 ## 2.依赖
 [http-parser](https://github.com/nodejs/http-parser) 功能强大，用来解析url<br>
