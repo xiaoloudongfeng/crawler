@@ -144,6 +144,8 @@ static void work_process_cycle(int n)
 
     sprintf(os_argv[0], "crawler: work process[%d]", n);
 
+    LOG_INIT("[%d]", n);
+
     // 如果在fork之前调用epoll_create创建文件描述
     // 符，那么父子进程共享同意epoll描述符，可能会
     // 引发一些问题，所以初始化操作均在fork之后调用

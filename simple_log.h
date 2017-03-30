@@ -18,6 +18,7 @@
 #define COLOR_TRACE     "37;40;1m"
 
 char time_buf[64];
+char work_process[64];
 
 static inline void time_stamp(void)
 {
@@ -32,10 +33,15 @@ static inline void time_stamp(void)
         p->tm_year + 1900, p->tm_mon, p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec);
 }
 
+#define LOG_INIT(fmt, args...)                                                              \
+    do {                                                                                    \
+        sprintf(work_process, fmt, ##args);                                                 \
+    } while (0)
+
 #define LOG_BASE(level, fmt, args...)                                                       \
     do {                                                                                    \
         time_stamp();                                                                       \
-        fprintf(stderr, ESC_START COLOR_##level "%s " fmt ESC_END LN, time_buf, ##args);    \
+        fprintf(stderr, ESC_START COLOR_##level "%s %s " fmt ESC_END LN, time_buf, work_process, ##args);    \
     } while (0)
 
 #define LOG_FATAL(fmt, args...)                                                             \

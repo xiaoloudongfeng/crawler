@@ -23,10 +23,10 @@
 #define TIMEOUT_SSL     10000
 #define TIMEOUT_SEND    5000
 
+static void ssl_handshake_handler(event_t *ev);
 static void http_write_event_process(event_t *wev);
-static int http_ssl_handshake(connection_t *c);
 
-// windowbits = 47???
+// windowbits = 47 ???
 static int inflate_gzip(http_buf_t *source, http_buf_t *dest, int windowbits)
 {
     LOG_DEBUG("enter inflate_gzip()");
@@ -612,28 +612,6 @@ static int http_process_response(http_client_t *client)
         }
     }
 
-    if (client->status == HTTP_HTML_DONE) {
-        /*
-        LOG_DEBUG("client->html->html->start: %p, client->html->html->last: %p", 
-            client->html->html->start, client->html->html->last);
-        LOG_DEBUG("%s", client->html->html->start);
-        */
-    
-        if (strstr(client->url->path, ".jpg") || strstr(client->url->path, ".jpeg")) {
-            client->status = HTTP_PARSE_DONE;
-            LOG_INFO("html[%s://%s%s] parsed done", client->url->schema, client->url->host, client->url->path);
-        }
-
-        LOG_INFO("parsing html[%s://%s%s]", client->url->schema, client->url->host, client->url->path);
-        if (client->handler) {
-            client->handler(client);
-        }
-        
-        if (client->status == HTTP_PARSE_DONE) {
-            LOG_INFO("html[%s://%s%s] parsed done", client->url->schema, client->url->host, client->url->path);
-        }
-    }
-
     return 0;
 }
 
@@ -713,117 +691,30 @@ static void http_read_event_process(event_t *rev)
         goto failed;
     }
 
-    // server closed socket
-    if (rev->pending_eof) {
-        LOG_DEBUG("server closed socket");
-
-        // it may not be a real fail, just html parsed and we must retrieve the resource 
-        goto failed;
-    }
-
-    return;
-
-failed:
-    if (client->status != HTTP_PARSE_DONE) {
-        LOG_ERROR("html[%s://%s%s] failed", client->url->schema, client->url->host, client->url->path);
-    }
-
-    LOG_DEBUG("retrieving resource[%s://%s%s]...", client->url->schema, client->url->host, client->url->path);
-    free(client->url->buf);
-    free(client->url);
-    free(client->sockaddr);
-    close_connection(client->connection);
+    // 3.server closed socket or html receive done
+    if (client->status == HTTP_HTML_DONE || rev->pending_eof) {
+        /*
+        LOG_DEBUG("client->html->html->start: %p, client->html->html->last: %p", 
+            client->html->html->start, client->html->html->last);
+        LOG_DEBUG("%s", client->html->html->start);
+        */
     
-    destroy_temp_buf(client->req);
-    destroy_temp_buf(client->recv);
-
-    if (client->head) {
-        if (client->head->vsr) {
-            free(client->head->vsr);
+        if (rev->pending_eof) {
+            LOG_DEBUG("server closed socket");
         }
-
-        queue_t *q = &client->head->kv_queue;
-        while (q != q->next) {
-            key_value_t *tmp = queue_data(q->next, key_value_t, queue);
-            queue_remove(q->next);
-            free(tmp);
-        }
-
-        free(client->head);
-    }
-
-    if (client->html) {
-        if (client->html->chunks) {
-            destroy_temp_buf(client->html->chunks);
-        }
-
-        queue_t *q = &client->html->chunk_queue;
-        while (q != q->next) {
-            key_value_t *tmp = queue_data(q->next, key_value_t, queue);
-            queue_remove(q->next);
-            free(tmp);
-        }
-
-        if (client->html->html) {
-            destroy_temp_buf(client->html->html);
-        }
-
-        free(client->html);
-    }
-   
-    free(client);
-    LOG_DEBUG("retrieving resource done");
-}
-
-static void ssl_handshake_handler(event_t *ev)
-{
-    connection_t   *c;
-    http_client_t  *client;
-    int             rc;
-
-    c = ev->data;
-    client = c->data;
-
-    LOG_DEBUG("SSL handshake handler");
-
-    if (ev->timedout) {
-        LOG_ERROR("html[%s://%s%s] time out", client->url->schema, client->url->host, client->url->path);
         
-        goto failed;
+        if (client->handler) {
+            LOG_INFO("parsing html[%s://%s%s]", client->url->schema, client->url->host, client->url->path);
+            client->handler(client);
+        }
     }
 
-    rc = http_ssl_handshake(c);
-    if (rc == EAGAIN) {
-        event_add_timer(c->write, TIMEOUT_SSL);
-        return;
-    }
-
-    if (rc < 0) {
-        goto failed;
-    }
-    
-    if (c->ssl->handshaked) {
-        c->write->handler = http_write_event_process;
-        event_add_timer(c->write, TIMEOUT_SEND);
-    }
-    
     return;
 
 failed:
-    LOG_ERROR("html[%s://%s%s] failed", client->url->schema, client->url->host, client->url->path);
-    if (c->ssl) {
-        SSL_free(c->ssl->connection);
-        SSL_CTX_free(c->ssl->ctx);
-        free(c->ssl);
-        c->ssl = NULL;
+    if (client->handler) {
+        client->handler(client);
     }
-    
-    free(client->url->buf);
-    free(client->url);
-    free(client->sockaddr);
-    close_connection(client->connection);
-   
-    free(client);
 }
 
 static int ssl_create(connection_t *c)
@@ -890,7 +781,7 @@ static int http_ssl_handshake(connection_t *c)
 {
     int rc, sslerr, err;
 
-    LOG_DEBUG("http_ssl_handshake");
+    LOG_DEBUG("entering http_ssl_handshake()");
 
     if (c->ssl == NULL) {
         if (ssl_create(c) < 0) {
@@ -899,12 +790,10 @@ static int http_ssl_handshake(connection_t *c)
     }
 
     rc = SSL_connect(c->ssl->connection);
-    //rc = SSL_do_handshake(c->ssl->connection);
-    
-    //LOG_DEBUG("SSL_connect: %d", rc);
-    //LOG_DEBUG("SSL_do_handshake: %d", rc);
 
     if (rc == 1) {
+        LOG_DEBUG("SSL_connect() success");
+
         c->ssl->handshaked = 1;
         c->recv = ssl_recv;
         c->send = ssl_send;
@@ -919,26 +808,6 @@ static int http_ssl_handshake(connection_t *c)
     LOG_DEBUG("SSL_get_error: %d", sslerr);
 
     if (sslerr == SSL_ERROR_WANT_READ || sslerr == SSL_ERROR_WANT_WRITE) {
-/*
-        c->read->ready = 0;
-        c->write->ready = 0;
-        c->read->handler = ssl_handshake_handler;
-        c->write->handler = ssl_handshake_handler;
-
-        if (!c->write->active) {
-            if (event_add(c->write, WRITE_EVENT, CLEAR_EVENT) != 0) {
-                LOG_ERROR("event_add() failed");
-                return -1;
-            }
-        }
-
-        if (!c->read->active) {
-            if (event_add(c->read, READ_EVENT, CLEAR_EVENT) != 0) {
-                LOG_ERROR("event_add() failed");
-                return -1;
-            }
-        }
-*/
         return EAGAIN;
     }
 
@@ -951,6 +820,48 @@ static int http_ssl_handshake(connection_t *c)
     LOG_ERROR("SSL_do_handshake() failed err[%d] sslerr[%d]", err, sslerr);
 
     return -1;
+}
+
+static void ssl_handshake_handler(event_t *ev)
+{
+    connection_t   *c;
+    http_client_t  *client;
+    int             rc;
+
+    c = ev->data;
+    client = c->data;
+
+    LOG_DEBUG("SSL handshake handler");
+
+    if (ev->timedout) {
+        LOG_ERROR("html[%s://%s%s] time out", client->url->schema, client->url->host, client->url->path);
+        
+        goto failed;
+    }
+
+    rc = http_ssl_handshake(c);
+    if (rc == EAGAIN) {
+        event_add_timer(c->write, TIMEOUT_SSL);
+        return;
+    }
+
+    if (rc < 0) {
+        goto failed;
+    }
+    
+    if (c->ssl->handshaked) {
+        c->write->handler = http_write_event_process;
+        event_add_timer(c->write, TIMEOUT_SEND);
+    }
+    
+    return;
+
+failed:
+    LOG_ERROR("html[%s://%s%s] failed", client->url->schema, client->url->host, client->url->path);
+
+    if (client->handler) {
+        client->handler(client);
+    }
 }
 
 static int pack_req_buf(http_client_t *client)
@@ -1055,24 +966,9 @@ static void http_write_event_process(event_t *wev)
     }
 
 failed:
-    if (c->ssl) {
-        SSL_free(c->ssl->connection);
-        SSL_CTX_free(c->ssl->ctx);
-        free(c->ssl);
-        c->ssl = NULL;
+    if (client->handler) {
+        client->handler(client);
     }
-
-    if (client->req) {
-        free(client->req->start);
-        free(client->req);
-    }
-
-    free(client->url->buf);
-    free(client->url);
-    free(client->sockaddr);
-    close_connection(client->connection);
-    
-    free(client);
 }
 
 static int http_conn(http_client_t *client)
@@ -1120,6 +1016,9 @@ static int http_conn(http_client_t *client)
     if (connect(fd, client->sockaddr, client->socklen) < 0) {
         if (errno != EINPROGRESS) {
             LOG_ERROR("connect() failed");
+           
+            // 加不加都一样，close_connection() 中会调用 close(fd)
+            // event_del(wev, WRITE_EVENT, 0);
             goto failed;
         }
     
@@ -1134,6 +1033,73 @@ static int http_conn(http_client_t *client)
 failed:
     close_connection(c);
     return -1;
+}
+
+void http_client_retrieve(http_client_t *client)
+{
+    connection_t *c;
+
+    if (client->url) {
+        LOG_DEBUG("retrieving resource[%s://%s%s]...", client->url->schema, client->url->host, client->url->path);
+        free(client->url->buf);
+        free(client->url);
+    }
+
+    if (client->sockaddr) {
+        free(client->sockaddr);
+    }
+
+    if (client->connection) {
+        c = client->connection;
+        if (c->ssl) {
+            SSL_free(c->ssl->connection);
+            SSL_CTX_free(c->ssl->ctx);
+            free(c->ssl);
+            c->ssl = NULL;
+        }
+        close_connection(c);
+        client->connection = NULL;
+    }
+    
+    destroy_temp_buf(client->req);
+    destroy_temp_buf(client->recv);
+
+    if (client->head) {
+        if (client->head->vsr) {
+            free(client->head->vsr);
+        }
+
+        queue_t *q = &client->head->kv_queue;
+        while (q != q->next) {
+            key_value_t *tmp = queue_data(q->next, key_value_t, queue);
+            queue_remove(q->next);
+            free(tmp);
+        }
+
+        free(client->head);
+    }
+
+    if (client->html) {
+        if (client->html->chunks) {
+            destroy_temp_buf(client->html->chunks);
+        }
+
+        queue_t *q = &client->html->chunk_queue;
+        while (q != q->next) {
+            key_value_t *tmp = queue_data(q->next, key_value_t, queue);
+            queue_remove(q->next);
+            free(tmp);
+        }
+
+        if (client->html->html) {
+            destroy_temp_buf(client->html->html);
+        }
+
+        free(client->html);
+    }
+   
+    free(client);
+    LOG_DEBUG("retrieving resource done");
 }
 
 void http_client_create(http_url_t *url, struct in_addr *sin_addr, http_client_handler_pt handler)
@@ -1159,23 +1125,21 @@ void http_client_create(http_url_t *url, struct in_addr *sin_addr, http_client_h
     sa->sin_family = AF_INET;
     sa->sin_port = htons(url->port);
     sa->sin_addr = *sin_addr;
-
-    client->sockaddr = (struct sockaddr *) sa;
+    
+    client->handler = handler;
+    client->sockaddr = (struct sockaddr *)sa;
     client->socklen = sizeof(*sa);
-
     client->url = url;
     if (!strcmp("https", url->schema)) {
         client->ssl_flag = 1;
     }
 
-    client->handler = handler;
-
     if (http_conn(client) < 0) {
         LOG_ERROR("http_client_conn() failed");
 
-        free(client);
-        free(sa);
-        goto failed;
+        if (client->handler) {
+            client->handler(client);
+        }
     }
 
     return;

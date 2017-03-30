@@ -81,7 +81,6 @@ struct http_client_s {
         HTTP_REQ_DONE, 
         HTTP_HEAD_DONE, 
         HTTP_HTML_DONE, 
-        HTTP_URL_DONE, 
         HTTP_PARSE_DONE
     }                   status;
 
@@ -97,10 +96,11 @@ struct http_client_s {
     html_cache_t       *html;
 
     unsigned            ssl_flag:1;
-    http_client_handler_pt handler;
+    http_client_handler_pt handler;     // 如果handler判断http_client->status != HTTP_PARSE_DONE，则调用回收函数
 };
 
 void http_client_create(http_url_t *url, struct in_addr *sin_addr, http_client_handler_pt handler);
+void http_client_retrieve(http_client_t *client);
 
 http_buf_t *create_temp_buf(size_t size);
 int resize_temp_buf(http_buf_t *b);

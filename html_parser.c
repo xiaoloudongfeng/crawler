@@ -45,7 +45,7 @@ static void search_for_links(GumboNode *node)
                 sprintf(key, "url_list_%d", id);
 
                 // 插入Redis队列中
-                LOG_DEBUG("insert rpush %s to %s", httpurl, key);
+                LOG_DEBUG("rpush %s to %s", httpurl, key);
                 if (redis_list_rpush(key, httpurl) < 0) {
                     LOG_ERROR("redis_list_rpush() failed");
 
@@ -88,7 +88,7 @@ static void search_for_author(GumboNode *node, char *title, char *category, char
                     if (class && !strcmp(class->value, "cr_date")) {
                         GumboNode *a_node = node->v.element.children.data[0];
 
-                        if (a_node->type == GUMBO_NODE_TEXT) {
+                        if (a_node && a_node->type == GUMBO_NODE_TEXT) {
                             // LOG_INFO("%s", a_node->v.text.text);
                             strcpy(category, a_node->v.text.text);
                         }
@@ -110,7 +110,7 @@ static void search_for_author(GumboNode *node, char *title, char *category, char
                 if (class && !strcmp(class->value, "cr_h1title")) {
                     GumboNode *a_node = node->v.element.children.data[0];
 
-                    if (a_node->type == GUMBO_NODE_TEXT) {
+                    if (a_node && a_node->type == GUMBO_NODE_TEXT) {
                         // LOG_INFO("%s", a_node->v.text.text);
                         strcpy(title, a_node->v.text.text);
                     }
@@ -133,7 +133,7 @@ static void search_for_author(GumboNode *node, char *title, char *category, char
                     
                     GumboNode *a_node = node->v.element.children.data[0];
                     
-                    if (a_node->type == GUMBO_NODE_TEXT) {
+                    if (a_node && a_node->type == GUMBO_NODE_TEXT) {
                         // LOG_INFO("%s", a_node->v.text.text);
                         strcpy(author, a_node->v.text.text);
                     }
@@ -153,7 +153,7 @@ static void search_for_author(GumboNode *node, char *title, char *category, char
                     
                 GumboNode *a_node = node->v.element.children.data[0];
                     
-                if (a_node->type == GUMBO_NODE_TEXT) {
+                if (a_node && a_node->type == GUMBO_NODE_TEXT) {
                     if (strchr(a_node->v.text.text, ':')) {
                         // LOG_INFO("%s", a_node->v.text.text);
                         strcpy(timestamp, a_node->v.text.text);
@@ -176,9 +176,21 @@ int parse_html(http_client_t *client)
     char        category[1024] = {};
     char        author[1024] = {};
     char        timestamp[1024] = {};
+    char        httpurl[1024] = {};
     GumboOutput *output;
+    
+    int         rc = -1;
+
+    if (client->status != HTTP_HTML_DONE) {
+        LOG_ERROR("html[%s://%s%s] failed", client->url->schema, client->url->host, client->url->path);
+        goto failed;
+    }
 
     output = gumbo_parse((const char *)client->html->html->start);
+    if (output == NULL) {
+        LOG_ERROR("gumbo_parse() failed");
+        goto failed;
+    }
 
     if (strstr(client->url->path, "forum.php?mod=forumdisplay&fid=2")) {
         search_for_links(output->root);
@@ -190,7 +202,17 @@ int parse_html(http_client_t *client)
 
     gumbo_destroy_output(&kGumboDefaultOptions, output);
 
+    rc = 0;
     client->status = HTTP_PARSE_DONE;
+    
+    // 解析完成，将url推入parse_done队列中
+    sprintf(httpurl, "%s://%s%s", client->url->schema, client->url->host, client->url->path);
+    if (redis_list_rpush("parse_done", httpurl) < 0) {
+        LOG_ERROR("redis_list_rpush() failed");
+    }
 
-    return 0;
+failed:
+    http_client_retrieve(client);
+    return rc;
 }
+
