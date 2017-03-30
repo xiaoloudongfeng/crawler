@@ -18,7 +18,7 @@ static void crawler_signal_handler(int signo)
 
 lua_State *init_lua_state(const char *fname)
 {
-    lua_State *L = lua_open();
+    lua_State *L = luaL_newstate();
     luaL_openlibs(L);
 
     if (luaL_loadfile(L, fname) || lua_pcall(L, 0, 0, 0)) {
