@@ -1,13 +1,14 @@
 #include "core.h"
 
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
-#include "process_cycle.h"
+char **os_argv;
 
-int main(void)
+int main(int argc, char **argv)
 {
     lua_State *L;
+
+    daemon(1, 1);
+
+    os_argv = argv;
 
     SSL_library_init();
     SSL_load_error_strings();
@@ -25,9 +26,7 @@ int main(void)
     get_url_seed(L);
 
     free_lua_state(L);
-    LOG_DEBUG("free_lua_state()");
     redis_free();
-    LOG_DEBUG("redis_free()");
 
     start_work_processes();
     

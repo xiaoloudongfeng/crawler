@@ -2,7 +2,19 @@
 #include "murmur3.h"
 
 int work_processes;
+pid_t *work_processes_pid;
 int connection_threshold;
+int crawler_quit;
+
+static void crawler_signal_handler(int signo)
+{
+    switch (signo) {
+    case SIGINT:
+        LOG_INFO("get a SIGINT");
+        crawler_quit = 1;
+        break;
+    }
+}
 
 lua_State *init_lua_state(const char *fname)
 {
@@ -73,7 +85,7 @@ void get_url_seed(lua_State *L)
         LOG_DEBUG("get url[%s]", url);
 
         // 计算url的hash值，并对work_processes取模，将url散列到不同的队列中
-        MurmurHash3_x86_32(url, strlen(url), SEED_NUM, (void *)&id);
+        MurmurHash3_x86_32(url, strlen(url), HASH_SEED, (void *)&id);
         id %= work_processes;
 
         // 根据id得到list的key
@@ -117,10 +129,20 @@ static void create_http_client(http_url_t *url, struct in_addr *sin_addr)
 
 static void work_process_cycle(int n)
 {
-    int         i;
-    char       *url;
-    char        key[128];
-    http_url_t *http_url;
+    int              i;
+    char            *url;
+    char             key[128];
+    http_url_t      *http_url;
+    struct sigaction sa;
+
+    sa.sa_handler = crawler_signal_handler;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        LOG_ERROR("sigaction(SIGINT) failed");
+        return;
+    }
+
+    sprintf(os_argv[0], "crawler: work process[%d]", n);
 
     // 如果在fork之前调用epoll_create创建文件描述
     // 符，那么父子进程共享同意epoll描述符，可能会
@@ -161,6 +183,11 @@ static void work_process_cycle(int n)
     process_setaffinity(n);
 
     for ( ;; ) {
+        if (crawler_quit) {
+            LOG_INFO("work process[%d] terminating...", n);
+            break;
+        }
+
         LOG_INFO("-----process_%d round[%d]-----", n, i++);
 
         if (get_free_connection_n() > connection_threshold) {
@@ -182,15 +209,34 @@ static void work_process_cycle(int n)
 
         event_expire_timers();
     }
+
+    redis_free();
+    exit(0);
 }
 
-//int start_work_processes(int n)
 int start_work_processes(void)
 {
-    pid_t pid;
-    int   i;
+    pid_t            pid;
+    int              i;
+    struct sigaction sa;
 
-    //for (i = 0; i < n; i++) {
+    sa.sa_handler = crawler_signal_handler;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        LOG_ERROR("sigaction(SIGINT) failed");
+        return -1;
+    }
+    
+    work_processes_pid = malloc(sizeof(pid_t) * work_processes);
+    if (!work_processes_pid) {
+        LOG_ERROR("malloc failed");
+        return -1;
+    }
+
+    for (i = 0; i < work_processes; i++) {
+        work_processes_pid[i] = -1;
+    }
+   
     for (i = 0; i < work_processes; i++) {
         pid = fork();
     
@@ -200,17 +246,28 @@ int start_work_processes(void)
             return -1;
 
         case 0:
-            LOG_DEBUG("process_%d start", i);
+            LOG_DEBUG("work process[%d] start", i);
             work_process_cycle(i);
             break;
 
         default:
+            LOG_DEBUG("get work process[%d]", pid);
+            work_processes_pid[i] = pid;
             break;
         }
     }
 
     for ( ;; ) {
-        sleep(1);
+        // master进程实现
+        if (crawler_quit) {
+            for (i = 0; i < work_processes; i++) {
+                kill(work_processes_pid[i], SIGINT);
+            }
+
+            break;
+        }
+
+        sleep(5);
     }
 
     return 0;

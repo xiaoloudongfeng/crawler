@@ -1,7 +1,6 @@
 #include "core.h"
 #include <gumbo.h>
 
-#include "html_parser.h"
 #include "murmur3.h"
 #include "process_cycle.h"
 
@@ -38,7 +37,7 @@ static void search_for_links(GumboNode *node)
                 bloom_set(httpurl);
 
                 // 计算url的hash值，并对work_processes取模，将url散列到不同的队列中
-                MurmurHash3_x86_32(httpurl, strlen(httpurl), SEED_NUM, (void *)&id);
+                MurmurHash3_x86_32(httpurl, strlen(httpurl), HASH_SEED, (void *)&id);
                 id %= work_processes;
 
                 // 根据id得到list的key

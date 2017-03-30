@@ -7,7 +7,9 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-#define SEED_NUM 8887
+extern char **os_argv;
+
+#define HASH_SEED 8887
 
 extern int work_processes;
 
