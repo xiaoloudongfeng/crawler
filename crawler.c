@@ -14,6 +14,8 @@ int main(int argc, char **argv)
     SSL_load_error_strings();
     OpenSSL_add_all_algorithms();
 
+    LOG_INIT("[M]");
+
     if (redis_init() < 0) {
         LOG_ERROR("redis_init() failed");
         return -1;

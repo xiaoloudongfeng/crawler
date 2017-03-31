@@ -4,7 +4,62 @@
 int work_processes;
 pid_t *work_processes_pid;
 int connection_threshold;
+
 int crawler_quit;
+
+static void crawler_process_get_status(void)
+{
+    pid_t   pid;
+    int     status;
+    int     one, i;
+
+    one = 0;
+
+    for ( ;; ) {
+        pid = waitpid(-1, &status, WNOHANG);
+
+        if (pid == 0) {
+            return;
+        }
+
+        if (pid == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            if (errno == ECHILD && one) {
+                return;
+            }
+
+            if (errno == ECHILD) {
+                LOG_INFO("waitpid() failed");
+                return;
+            }
+
+            LOG_ERROR("waitpid() failed");
+            return;
+        }
+
+        one = 1;
+
+        for (i = 0; i < work_processes; i++) {
+            if (work_processes_pid[i] == pid) {
+                LOG_INFO("work_process[%d] exited", i);
+                break;
+            }
+        }
+
+        if (WTERMSIG(status)) {
+            LOG_ERROR("work_process[%d] %d exited on signal %d%s", 
+                i, pid, WTERMSIG(status), 
+                WCOREDUMP(status) ? "(core dumped)" : "");
+
+        } else {
+            LOG_ERROR("work_process[%d] %d exited with code %d", 
+                i, pid, WEXITSTATUS(status));
+        }
+    }
+}
 
 static void crawler_signal_handler(int signo)
 {
@@ -12,6 +67,11 @@ static void crawler_signal_handler(int signo)
     case SIGINT:
         LOG_INFO("get a SIGINT");
         crawler_quit = 1;
+        break;
+
+    case SIGCHLD:
+        LOG_INFO("get a SIGCHLD");
+        crawler_process_get_status();
         break;
     }
 }
@@ -134,6 +194,12 @@ static void work_process_cycle(int n)
     char             key[128];
     http_url_t      *http_url;
     struct sigaction sa;
+    sigset_t         set;
+
+    sigemptyset(&set);
+    if (sigprocmask(SIG_SETMASK, &set, NULL) == -1) {
+        LOG_ERROR("sigprocmask() failed");
+    }
 
     sa.sa_handler = crawler_signal_handler;
     sigemptyset(&sa.sa_mask);
@@ -147,7 +213,7 @@ static void work_process_cycle(int n)
     LOG_INIT("[%d]", n);
 
     // 如果在fork之前调用epoll_create创建文件描述
-    // 符，那么父子进程共享同意epoll描述符，可能会
+    // 符，那么父子进程共享同一epoll描述符，可能会
     // 引发一些问题，所以初始化操作均在fork之后调用
     if (event_init(1024) < 0) {
         LOG_ERROR("event_init() failed");
@@ -220,12 +286,34 @@ int start_work_processes(void)
 {
     pid_t            pid;
     int              i;
+    sigset_t         set;
     struct sigaction sa;
 
+    sprintf(os_argv[0], "crawler: master process");
+    
+    sigemptyset(&set);
+    sigaddset(&set, SIGCHLD);
+    sigaddset(&set, SIGINT);
+    if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) {
+        LOG_ERROR("sigprocmask() failed");
+
+        return -1;
+    }
+    sigemptyset(&set);
+
+    memset(&sa, 0, sizeof(sa));
     sa.sa_handler = crawler_signal_handler;
     sigemptyset(&sa.sa_mask);
     if (sigaction(SIGINT, &sa, NULL) < 0) {
         LOG_ERROR("sigaction(SIGINT) failed");
+        return -1;
+    }
+    
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = crawler_signal_handler;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGCHLD, &sa, NULL) < 0) {
+        LOG_ERROR("sigaction(SIGCHLD) failed");
         return -1;
     }
     
@@ -260,16 +348,18 @@ int start_work_processes(void)
     }
 
     for ( ;; ) {
+        sigsuspend(&set);
+
         // master进程实现
         if (crawler_quit) {
+            LOG_DEBUG("terminating child processes...");
             for (i = 0; i < work_processes; i++) {
                 kill(work_processes_pid[i], SIGINT);
+                sleep(1);
             }
 
             break;
         }
-
-        sleep(5);
     }
 
     return 0;

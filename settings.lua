@@ -1,4 +1,4 @@
-work_processes = 4
+work_processes = 2
 connection_threshold = 1010
 seed = {
     "http://bbs.dgtle.com/forum.php?mod=forumdisplay&fid=2"
