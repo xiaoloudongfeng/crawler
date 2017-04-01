@@ -499,14 +499,30 @@ http_url_t *create_http_url(const char *str_url)
 
     } else {
         if ((u.field_set & (1 << UF_HOST))) {
-            strncpy(schema, str_url + u.field_data[UF_SCHEMA].off, u.field_data[UF_SCHEMA].len);
             strncpy(host, str_url + u.field_data[UF_HOST].off, u.field_data[UF_HOST].len);
-            strcpy(path, str_url + u.field_data[UF_PATH].off);
         
         } else {
             LOG_ERROR("host_name don't exist");
 
             return NULL;
+        }
+
+        if ((u.field_set & (1 << UF_SCHEMA))) {
+            strncpy(schema, str_url + u.field_data[UF_SCHEMA].off, u.field_data[UF_SCHEMA].len);
+        
+        } else {
+            LOG_WARN("schema don't exist");
+
+            strcpy(schema, "http");
+        }
+
+        if ((u.field_set & (1 << UF_PATH))) {
+            strcpy(path, str_url + u.field_data[UF_PATH].off);
+
+        } else {
+            LOG_WARN("path don't exist");
+
+            strcpy(path, "/");
         }
     }
 
