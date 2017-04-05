@@ -1,6 +1,4 @@
 #include "core.h"
-
-#include <hiredis/hiredis.h>
 #include "murmur3.h"
 
 #define SEED_NUM    9
@@ -13,43 +11,17 @@ unsigned int    seeds[SEED_NUM] = {
                                     9901
                                   };
 
-redisContext   *ctx = NULL;
-
 int bloom_init(void)
 {
-    const char     *hostname = "127.0.0.1";
-    int             port = 6379;
-    struct timeval  timeout = {1, 500000};
-    redisReply     *reply = NULL;
-
-    ctx = redisConnectWithTimeout(hostname, port, timeout);
-    if (ctx == NULL || ctx->err) {
-        if (ctx) {
-            LOG_ERROR("Connection failed: %s", ctx->errstr);
-            redisFree(ctx);
-
-        } else {
-            LOG_ERROR("Connection failed: can't allocate redis context");
-        }
-
+    if (redis_string_setbit("bloom_filter", BIT_SIZE, 0) < 0) {
+        LOG_ERROR("redis_string_setbit() failed");
         return -1;
     }
 
-    reply = redisCommand(ctx, "SETBIT %s %u %s", "bloom_filter", BIT_SIZE, "0");
-    if (reply == NULL || ctx->err) {
-        LOG_ERROR("redisCommand failed: %s", ctx->errstr);
-        
+    if (redis_string_bitop("bloom_filter", "bloom_filter", "XOR", "bloom_filter") < 0) {
+        LOG_ERROR("redis_string_setbit() failed");
         return -1;
     }
-    freeReplyObject(reply);
-
-    reply = redisCommand(ctx, "BITOP %s %s %s %s", "XOR", "bloom_filter", "bloom_filter", "bloom_filter");
-    if (reply == NULL || ctx->err) {
-        LOG_ERROR("redisCommand failed: %s", ctx->errstr);
-        return -1;
-    }
-
-    freeReplyObject(reply);
 
     return 0;
 }
@@ -58,19 +30,15 @@ int bloom_set(const char *str)
 {
     unsigned int    i = 0;
     unsigned int    off = 0;
-    redisReply     *reply = NULL;
 
     for (i = 0; i < SEED_NUM; i++) {
         MurmurHash3_x86_32(str, strlen(str), seeds[i], (void *)&off);
         //printf("off[%d]: %u\n", i, off);
         
-        reply = redisCommand(ctx, "SETBIT %s %u %s", "bloom_filter", off, "1");
-        if (reply == NULL || ctx->err) {
-            LOG_ERROR("redisCommand failed: %s", ctx->errstr);
-            
+        if (redis_string_setbit("bloom_filter", off, 1) < 0) {
+            LOG_ERROR("redis_string_setbit() failed");
             return -1;
         }
-        freeReplyObject(reply);
     }
 
     return 0;
@@ -78,33 +46,31 @@ int bloom_set(const char *str)
 
 int bloom_check(const char *str)
 {
-    unsigned int    i = 0;
-    unsigned int    off = 0;
-    redisReply     *reply = NULL;
+    unsigned int i = 0;
+    unsigned int off = 0;
+    unsigned int value;
 
     for (i = 0; i < SEED_NUM; i++) {
         MurmurHash3_x86_32(str, strlen(str), seeds[i], (void *)&off);
         //printf("off[%d]: %u\n", i, off);
-        
-        reply = redisCommand(ctx, "GETBIT %s %u", "bloom_filter", off);
-        if (reply == NULL || ctx->err) {
-            LOG_ERROR("redisCommand failed: %s", ctx->errstr);
-
+     
+        if (redis_string_getbit("bloom_filter", off, &value) < 0) {
+            LOG_ERROR("redis_string_getbit() failed");
             return -1;
         }
 
-        //printf("reply->integer: %d\n", reply->integer);
-        if (!reply->integer) {
-            freeReplyObject(reply);
+        // printf("reply->integer: %d\n", reply->integer);
+        // 检查到有1位未置1，说明该字符串未被bloom_set()
+        if (!value) {
             return 0;
         }
-
-        freeReplyObject(reply);
     }
 
+    // 全中，说明该字符串被bloom_set()
     return 1;
 }
 
+/*
 int bloom_free(void)
 {
     if (ctx) {
@@ -114,11 +80,16 @@ int bloom_free(void)
 
     return 0;
 }
+*/
 
 /*
 int main(void)
 {
     int ret = 0;
+
+    ret = redis_init("127.0.0.1", 6379);
+    printf("redis_init: %d\n", ret);
+
     ret = bloom_init();
     printf("bloom_init: %d\n", ret);
     
@@ -128,7 +99,8 @@ int main(void)
     printf("bloom_set: %d\n", ret);
     ret = bloom_check("http://www.baidu.com");
     printf("bloom_check2: %d\n", ret);
-    
-    ret = bloom_free();
+
+    return 0;
 }
 */
+

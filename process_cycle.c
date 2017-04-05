@@ -217,34 +217,35 @@ static void work_process_cycle(int n)
     // 引发一些问题，所以初始化操作均在fork之后调用
     if (event_init(1024) < 0) {
         LOG_ERROR("event_init() failed");
-        return;
+        exit(0);
     }
 
     if (event_timer_init() < 0) {
         LOG_ERROR("event_timer_init() failed");
-        return;
+        exit(0);
     }
 
     if (connection_init(1024) < 0) {
         LOG_ERROR("connection_init() failed");
-        return;
+        exit(0);
     }
 
     // 同理，dns_init()中打开了一个文件描述符
     if (dns_init() < 0) {
         LOG_ERROR("dns_init() failed");
-        return;
+        exit(0);
+    }
+
+    // bloom_init() 依赖redis_init()，必须先初始化
+    if (redis_init("127.0.0.1", 6379) < 0) {
+        LOG_ERROR("redis_init() failed");
+        exit(0);
     }
 
     // 从hiredis结构体中可以看到，里面有一个文件描述符
     if (bloom_init() < 0) {
         LOG_ERROR("bloom_init() failed");
-        return;
-    }
-
-    if (redis_init() < 0) {
-        LOG_ERROR("redis_init() failed");
-        return;
+        exit(0);
     }
 
     sprintf(key, "url_list_%d", n);

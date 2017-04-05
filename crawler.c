@@ -6,7 +6,7 @@ int main(int argc, char **argv)
 {
     lua_State *L;
 
-    daemon(1, 1);
+    //daemon(1, 1);
 
     os_argv = argv;
 
@@ -16,7 +16,7 @@ int main(int argc, char **argv)
 
     LOG_INIT("[M]");
 
-    if (redis_init() < 0) {
+    if (redis_init("127.0.0.1", 6379) < 0) {
         LOG_ERROR("redis_init() failed");
         return -1;
     }
