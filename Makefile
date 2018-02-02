@@ -1,7 +1,9 @@
-src  := $(shell ls *.c)
+SRC_PATH := ./src
+
+src  := $(shell ls $(SRC_PATH)/*.c)
 objs := $(patsubst %.c, %.o, $(src))
 CC = gcc
-CPPFLAGS = -I.
+CPPFLAGS = -I$(SRC_PATH)
 CPPFLAGS += -Wall
 LDFLAGS = -lssl -lz -lcrypto -lhttp_parser -lgumbo -lhiredis -llua
 
@@ -12,4 +14,4 @@ crawler: $(objs)
 	$(CC) $(CPPFLAGS) -c -o $@ $<
 
 clean:
-	rm -f *.o crawler a.out
+	rm -f $(SRC_PATH)/*.o crawler 
